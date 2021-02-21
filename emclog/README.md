@@ -1,0 +1,2 @@
+# emclog
+LinuxCNC Position Logger
