@@ -1,2 +1,9 @@
-
-
+*.buildinfo
+*.changes
+emclog/emclog.egg-info
+emclog/build
+emclog/debian/emclog
+emclog/debian/.debhelper
+emclog/debian/*.log
+emclog/debian/*.debhelper
+emclog/debian/*.substvars
