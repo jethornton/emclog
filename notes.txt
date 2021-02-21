@@ -1,0 +1,2 @@
+to build a deb from the top most directory
+fakeroot dpkg-buildpackage -b -uc

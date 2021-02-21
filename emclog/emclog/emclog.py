@@ -1,0 +1,243 @@
+#!/usr/bin/python
+
+import os, sys, math
+import linuxcnc
+
+from PyQt5 import uic
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QCheckBox, QRadioButton,
+QMessageBox, QFileDialog, QMenu)
+from PyQt5.QtCore import Qt, QTimer, QEvent
+
+IN_AXIS = os.environ.has_key("AXIS_PROGRESS_BAR")
+UI_FILE = os.path.join(os.path.dirname(__file__), "emclog.ui")
+
+
+class MainWindow(QMainWindow):
+	def __init__(self):
+		super(MainWindow, self).__init__()
+		self.s = linuxcnc.stat() # create a connection to the status channel
+		try: # make sure linuxcnc is running
+			self.s.poll()
+		except linuxcnc.error:
+			msg = QMessageBox()
+			msg.setIcon(QMessageBox.Critical)
+			msg.setWindowTitle('Error')
+			msg.setText('LinuxCNC is not running')
+			msg.setInformativeText('Start LinuxCNC first.')
+			msg.setStandardButtons(QMessageBox.Ok)
+			msg.exec_()
+			exit()
+		projectPath = os.path.abspath(os.path.dirname(sys.argv[0]))
+		uic.loadUi(UI_FILE, self)
+		self.qclip = QApplication.clipboard()
+		self.gcodeLW.installEventFilter(self)
+		self.axes = [(i) for i in range(9)if self.s.axis_mask & (1<<i)]
+		self.setupGUI()
+		self.setupConnections()
+		self.timer = QTimer()
+		self.timer.timeout.connect(self.update)
+		self.timer.start(100)
+		self.recordTimer = QTimer()
+		self.recordTimer.timeout.connect(self.log)
+		self.lastPosition = []
+		self.show()
+
+	def eventFilter(self, source, event):
+		if (event.type() == QEvent.ContextMenu and
+			source is self.gcodeLW):
+			contextMenu = QMenu()
+			deleteLine = contextMenu.addAction('Delete Line')
+			action = contextMenu.exec_(self.mapToGlobal(event.pos()))
+			if action == deleteLine:
+				self.gcodeLW.takeItem(self.gcodeLW.currentRow())
+			return True
+		return super(MainWindow, self).eventFilter(source, event)
+
+	def setupConnections(self):
+		self.actionOpen.triggered.connect(self.OpenFile)
+		self.actionSave.triggered.connect(self.SaveFile)
+		self.actionSave_As.triggered.connect(self.SaveFileAs)
+
+		self.actionExit.triggered.connect(self.exit)
+		self.logPB.clicked.connect(self.log)
+		self.addExtraPB.clicked.connect(self.addExtra)
+		if IN_AXIS:
+			self.sendToAxisPB.setEnabled(True)
+		self.sendToAxisPB.clicked.connect(self.sendToAxis)
+		self.actionCopy.triggered.connect(self.copy)
+		self.startPB.clicked.connect(self.record)
+		self.stopPB.clicked.connect(self.record)
+
+	def OpenFile(self):
+		if os.path.isdir(os.path.expanduser('~/linuxcnc/nc_files')):
+			configsDir = os.path.expanduser('~/linuxcnc/nc_files')
+		else:
+			configsDir = os.path.expanduser('~/')
+		fileName = QFileDialog.getOpenFileName(self,
+		caption="Select a G code File",
+		directory=configsDir,
+		filter='*.ngc',
+		options=QFileDialog.DontUseNativeDialog,)
+
+		if fileName:
+			self.gcodeLW.clear()
+			with open(fileName[0], 'r') as f:
+				for line in f:
+					self.gcodeLW.addItem(line.strip('\n'))
+			"""
+			iniFile = (fileName[0])
+			print(fileName[0])
+			with open(fileName[0]) as f:
+				text = f.read()
+				self.gCodeViewer.insertPlainText(text)
+			"""
+
+	def SaveFile(self):
+		if os.path.isdir(os.path.expanduser('~/linuxcnc/nc_files')):
+			configsDir = os.path.expanduser('~/linuxcnc/nc_files')
+		else:
+			configsDir = os.path.expanduser('~/')
+
+		fileName, _ = QFileDialog.getSaveFileName(self,
+		caption="Save G Code",
+		directory=configsDir,
+		options=QFileDialog.DontUseNativeDialog)
+		if fileName:
+			gcode = '\n'.join(self.gcodeLW.item(i).text() for i in range(self.gcodeLW.count()))
+			with open(fileName, 'w') as f:
+				f.write(gcode)
+
+	def SaveFileAs(self):
+		self.SaveFile()
+
+	def setupGUI(self):
+		self.positionCB.addItem('Relative', 'relative')
+		self.positionCB.addItem('Absolute', 'absolute')
+
+		# check axes that are and disable axes that are not
+		for i in range(9):
+			getattr(self, 'axisCB_' + str(i)).setChecked(i in self.axes)
+
+	def record(self):
+		if self.startPB.isChecked():
+			print('Starting {}'.format(self.intervalSB.value()))
+			timerInterval = self.intervalSB.value() * 1000
+			self.recordTimer.start(timerInterval)
+
+		elif self.stopPB.isChecked():
+			print('Stopping')
+			self.recordTimer.stop()
+
+	def log(self):
+		axes = []
+		for checkbox in self.axesGB.findChildren(QCheckBox): # get axes list
+			if checkbox.isChecked():
+				axes.insert(0, str(checkbox.objectName()[-1]))
+
+		gcode = []
+		currentPosition = []
+		for radio in self.moveGB.findChildren(QRadioButton):
+			if radio.isChecked(): # add the move type
+				gcode.append(str(radio.property('gcode')) + ' ')
+				moveType = str(radio.property('gcode'))
+		for axis in axes: # add each axis position
+			axisLetter = str(getattr(self, 'axisCB_' + axis).property('axis'))
+			position = str(getattr(self, 'positionLB_' + axis).text())
+			currentPosition.append(float(position))
+			gcode.append(axisLetter + position)
+
+		if moveType in ['G2', 'G3']:
+			if self.arcRadiusLE.text() == '':
+				self.mbox('{} moves require an arc radius'.format(moveType))
+				return
+			if len(self.lastPosition) == 0:
+				self.mbox('A G0 or G1 move must be done before a {} move'
+				.format(moveType))
+			x1 = self.lastPosition[0]
+			x2 = currentPosition[0]
+			y1 = self.lastPosition[1]
+			y2 = currentPosition[1]
+			if x1 == x2 and y1 == y2:
+				self.mbox('{} move needs a different end point'.format(moveType))
+				return
+			xMid = (x1 + x2) / 2
+			yMid = (y1 + y2) / 2
+			slope = (y2 - y1) / (x2 - x1)
+			distance = math.sqrt(pow((x1 - x2),2) + pow((y1 - y2),2))
+			radius = float(self.arcRadiusLE.text())
+			if radius < (distance / 2):
+				self.mbox('Radius can not be smaller than {0:0.4f}'.format(distance/2))
+				return
+
+			#cosine
+			c = 1/math.sqrt(1+((slope * -1)*(slope * -1)))
+			#sine
+			s = (slope * -1)/math.sqrt(1+((slope * -1)*(slope * -1)))
+
+		if moveType == 'G2':
+			i = xMid + radius * (c)
+			j = yMid + radius * (s)
+			gcode.append(' I{0:.{2}f} J{1:.{2}f}'.format(i, j, self.precisionSB.value()))
+		elif moveType == 'G3':
+			i = xMid + (-radius) * (c)
+			j = yMid + (-radius) * (s)
+			gcode.append(' I{0:.{2}f} J{1:.{2}f}'.format(i, j, self.precisionSB.value()))
+
+		if moveType in ['G1', 'G2', 'G3']: # check for a feed rate
+			feedMatch = self.gcodeLW.findItems('F', Qt.MatchContains)
+			if len(feedMatch) > 0: # check last feed rate to see if it is different
+				lastMatch =  str(feedMatch[-1].text()).split()
+				if lastMatch[-1][1:] != self.feedLE.text():
+					gcode.append(' F{}'.format(str(self.feedLE.text())))
+			if not self.gcodeLW.findItems('F', Qt.MatchContains):
+				if self.feedLE.text():
+					gcode.append(' F{}'.format(str(self.feedLE.text())))
+				else:
+					self.mbox('A feed rate must be entered for a {} move'.format(moveType))
+					return
+
+		self.gcodeLW.addItem(''.join(gcode))
+		self.lastPosition = []
+		for axis in axes:
+			self.lastPosition.append(float(getattr(self, 'positionLB_' + axis).text()))
+
+	def addExtra(self):
+		self.gcodeLW.addItem(self.extraLE.text())
+
+	def update(self):
+		self.s.poll()
+		if self.positionCB.currentData() == 'relative':
+			# sum the offsets with a negative sign
+			offsets = tuple(-sum(i) for i in zip(self.s.g5x_offset,self.s.g92_offset))
+			display = tuple(sum(i) for i in zip(offsets,self.s.actual_position))
+		else:
+			display = self.s.actual_position
+		for i in self.axes:
+			getattr(self, 'positionLB_' + str(i)).setText('{0:0.{1}f}'.format(display[i], self.precisionSB.value()))
+
+	def copy(self):
+		items = []
+		gcode = [str(self.gcodeLW.item(i).text()) for i in range(self.gcodeLW.count())]
+		self.qclip.setText('\n'.join(gcode))
+
+	def mbox(self, message):
+		msg = QMessageBox()
+		msg.setIcon(QMessageBox.Critical)
+		msg.setWindowTitle('Error')
+		msg.setText(message)
+		msg.setStandardButtons(QMessageBox.Ok)
+		msg.exec_()
+
+	def sendToAxis(self):
+		sys.stdout.write(self.g_code.get(0.0, END))
+
+	def exit(self):
+		exit()
+
+def main():
+	app = QApplication(sys.argv)
+	ex = MainWindow()
+	sys.exit(app.exec_())
+
+if __name__ == "__main__":
+	main()
