@@ -11,6 +11,7 @@ Welcome to Position Logger's documentation!
    :caption: Contents:
 
    install
+   usage
 
 Indices and tables
 ==================
