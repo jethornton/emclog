@@ -40,6 +40,7 @@ class MainWindow(QMainWindow):
 		self.recordTimer = QTimer()
 		self.recordTimer.timeout.connect(self.log)
 		self.lastPosition = []
+		self.dinLog = False
 		self.show()
 
 	def eventFilter(self, source, event):
@@ -214,6 +215,12 @@ class MainWindow(QMainWindow):
 			display = self.s.actual_position
 		for i in self.axes:
 			getattr(self, 'positionLB_' + str(i)).setText('{0:0.{1}f}'.format(display[i], self.precisionSB.value()))
+		if self.s.din[self.dioSB.value()] and not self.dinLog:
+			self.log()
+			self.dinLog = True
+			print('remote log')
+		elif not self.s.din[self.dioSB.value()] and self.dinLog:
+			self.dinLog = False
 
 	def copy(self):
 		items = []
