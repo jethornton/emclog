@@ -9,8 +9,14 @@ QMessageBox, QFileDialog, QMenu)
 from PyQt5.QtCore import Qt, QTimer, QEvent
 
 IN_AXIS = os.environ.has_key("AXIS_PROGRESS_BAR")
-UI_FILE = os.path.join(os.path.dirname(__file__), "emclog.ui")
 
+if os.path.split(sys.argv[0])[0] == '/usr/bin':
+	GUI_PATH = '/usr/lib/python3/dist-packages/libemclog'
+	print('Installed')
+
+if os.path.split(sys.argv[0])[0] == '.':
+	GUI_PATH = os.path.split(os.path.realpath(sys.argv[0]))[0]
+	print('In Development')
 
 class MainWindow(QMainWindow):
 	def __init__(self):
@@ -28,7 +34,7 @@ class MainWindow(QMainWindow):
 			msg.exec_()
 			exit()
 		projectPath = os.path.abspath(os.path.dirname(sys.argv[0]))
-		uic.loadUi(UI_FILE, self)
+		uic.loadUi(os.path.join(GUI_PATH, 'emclog.ui'), self)
 		self.qclip = QApplication.clipboard()
 		self.gcodeLW.installEventFilter(self)
 		self.axes = [(i) for i in range(9)if self.s.axis_mask & (1<<i)]
@@ -41,6 +47,7 @@ class MainWindow(QMainWindow):
 		self.recordTimer.timeout.connect(self.log)
 		self.lastPosition = []
 		self.dinLog = False
+		self.dinInput = self.dioSP.value()
 		self.show()
 
 	def eventFilter(self, source, event):
@@ -68,6 +75,10 @@ class MainWindow(QMainWindow):
 		self.actionCopy.triggered.connect(self.copy)
 		self.startPB.clicked.connect(self.record)
 		self.stopPB.clicked.connect(self.record)
+		self.dioSP.valueChanged.connect(self.changeInput)
+
+	def changeInput(self):
+		self.dinInput = self.dioSP.value()
 
 	def OpenFile(self):
 		if os.path.isdir(os.path.expanduser('~/linuxcnc/nc_files')):
@@ -215,11 +226,11 @@ class MainWindow(QMainWindow):
 			display = self.s.actual_position
 		for i in self.axes:
 			getattr(self, 'positionLB_' + str(i)).setText('{0:0.{1}f}'.format(display[i], self.precisionSB.value()))
-		if self.s.din[self.dioSB.value()] and not self.dinLog:
+		if self.s.din[self.dinInput] and not self.dinLog:
 			self.log()
 			self.dinLog = True
 			print('remote log')
-		elif not self.s.din[self.dioSB.value()] and self.dinLog:
+		elif not self.s.din[self.dinInput] and self.dinLog:
 			self.dinLog = False
 
 	def copy(self):
