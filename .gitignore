@@ -1,3 +1,5 @@
+*.dsc
+*.xz
 *.buildinfo
 *.changes
 emclog/emclog.egg-info
