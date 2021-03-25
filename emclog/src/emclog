@@ -1,6 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 
 import os, sys, math
+
+if sys.version_info[0] > 2:
+	raise Exception("Python 2 is required.")
+
 import ConfigParser
 import linuxcnc
 
@@ -156,7 +160,6 @@ class MainWindow(QMainWindow):
 		if os.path.exists(self.pref_path):
 			self.config.read(self.pref_path)
 			self.dioSB.setValue(self.config.getint('MAIN', 'dio'))
-			print(self.config.getint('MAIN', 'dio'))
 
 	def record(self):
 		if self.startPB.isChecked():
