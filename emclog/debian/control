@@ -1,15 +1,15 @@
 Source: emclog
-Section: python
-Priority: optional
 Maintainer: John Thornton, <jt@gnipsel.com>
-Build-Depends: debhelper (>= 7)
-X-Python-Version: >= 2.7
-Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.3
+Section: utils
+Priority: optional
 
 Package: emclog
+Priority: optional
 Architecture: all
 Section: python
-Depends: python, ${misc:Depends}, ${python:Depends}
+Depends: python, python-pyqt5 ${misc:Depends}
 Description: Position Logger
  Record positions in LinuxCNC
  Can record time based

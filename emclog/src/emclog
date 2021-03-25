@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os, sys, math
+import ConfigParser
 import linuxcnc
 
 from PyQt5 import uic
@@ -38,7 +39,6 @@ class MainWindow(QMainWindow):
 		self.qclip = QApplication.clipboard()
 		self.gcodeLW.installEventFilter(self)
 		self.axes = [(i) for i in range(9)if self.s.axis_mask & (1<<i)]
-		self.setupGUI()
 		self.setupConnections()
 		self.timer = QTimer()
 		self.timer.timeout.connect(self.update)
@@ -47,7 +47,11 @@ class MainWindow(QMainWindow):
 		self.recordTimer.timeout.connect(self.log)
 		self.lastPosition = []
 		self.dinLog = False
-		self.dinInput = self.dioSP.value()
+		self.dinInput = self.dioSB.value()
+		self.pref_path = os.path.join(os.path.expanduser("~"), '.emclog_preferences')
+		self.config = ConfigParser.SafeConfigParser()
+
+		self.setupGUI()
 		self.show()
 
 	def eventFilter(self, source, event):
@@ -65,6 +69,7 @@ class MainWindow(QMainWindow):
 		self.actionOpen.triggered.connect(self.OpenFile)
 		self.actionSave.triggered.connect(self.SaveFile)
 		self.actionSave_As.triggered.connect(self.SaveFileAs)
+		self.actionSavePreferences.triggered.connect(self.SavePreferences)
 
 		self.actionExit.triggered.connect(self.exit)
 		self.logPB.clicked.connect(self.log)
@@ -75,10 +80,10 @@ class MainWindow(QMainWindow):
 		self.actionCopy.triggered.connect(self.copy)
 		self.startPB.clicked.connect(self.record)
 		self.stopPB.clicked.connect(self.record)
-		self.dioSP.valueChanged.connect(self.changeInput)
+		self.dioSB.valueChanged.connect(self.changeInput)
 
 	def changeInput(self):
-		self.dinInput = self.dioSP.value()
+		self.dinInput = self.dioSB.value()
 
 	def OpenFile(self):
 		if os.path.isdir(os.path.expanduser('~/linuxcnc/nc_files')):
@@ -121,6 +126,24 @@ class MainWindow(QMainWindow):
 
 	def SaveFileAs(self):
 		self.SaveFile()
+	"""
+	# lets create that config file for next time...
+	cfgfile = open("c:\\next.ini",'w')
+
+	# add the settings to the structure of the file, and lets write it out...
+	Config.add_section('Person')
+	Config.set('Person','HasEyes',True)
+	Config.set('Person','Age', 50)
+	Config.write(cfgfile)
+	cfgfile.close()
+	"""
+	def SavePreferences(self):
+		if not os.path.exists(self.pref_path):
+			self.config.add_section('MAIN')
+		self.config.set('MAIN','dio', str(self.dioSB.value()))
+		with open(self.pref_path, 'w') as cfgfile:
+			self.config.write(cfgfile)
+		#	f.write(str(self.dioSB.value()))
 
 	def setupGUI(self):
 		self.positionCB.addItem('Relative', 'relative')
@@ -129,6 +152,11 @@ class MainWindow(QMainWindow):
 		# check axes that are and disable axes that are not
 		for i in range(9):
 			getattr(self, 'axisCB_' + str(i)).setChecked(i in self.axes)
+
+		if os.path.exists(self.pref_path):
+			self.config.read(self.pref_path)
+			self.dioSB.setValue(self.config.getint('MAIN', 'dio'))
+			print(self.config.getint('MAIN', 'dio'))
 
 	def record(self):
 		if self.startPB.isChecked():

@@ -1,0 +1,4 @@
+src/emclog usr/bin
+src/emclog.ui usr/lib/python3/dist-packages/libemclog
+*.desktop usr/share/applications
+

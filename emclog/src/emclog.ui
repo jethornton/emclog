@@ -552,7 +552,7 @@
       </property>
       <layout class="QGridLayout" name="gridLayout_11">
        <item row="0" column="0">
-        <widget class="QSpinBox" name="dioSP"/>
+        <widget class="QSpinBox" name="dioSB"/>
        </item>
       </layout>
      </widget>
@@ -613,6 +613,7 @@
    </attribute>
    <addaction name="actionCopy"/>
    <addaction name="actionExit"/>
+   <addaction name="actionSavePreferences"/>
   </widget>
   <action name="actionNew">
    <property name="text">
@@ -675,6 +676,11 @@
   <action name="actionSendToAxis">
    <property name="text">
     <string>Send to Axis</string>
+   </property>
+  </action>
+  <action name="actionSavePreferences">
+   <property name="text">
+    <string>Save Preferences</string>
    </property>
   </action>
  </widget>
